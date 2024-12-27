@@ -1,6 +1,0 @@
-[tool.pytest.ini_options]
-markers = [
-    "custom_marker: A test marker used for demonstration purposes",
-]
-
-

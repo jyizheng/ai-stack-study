@@ -1,0 +1,2 @@
+Naive conv2d time: 9.98461 ms
+im2col + GEMM time: 1.66195 ms
