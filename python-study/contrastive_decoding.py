@@ -36,6 +36,9 @@ with torch.no_grad():
     for _ in range(max_length - input_ids.shape[1]):
         # a. 分别获取两个模型的 logits (原始预测分数)
         # `[:, -1, :]` 获取最后一个token的logits
+        # [batch_size, sequence_length, vocab_size]
+        # 这个切片操作将 [batch_size, sequence_length, vocab_size] 形状的张量
+        # 变成了 [batch_size, vocab_size] 形状的二维张量
         expert_logits = expert_model(generated_ids).logits[:, -1, :]
         amateur_logits = amateur_model(generated_ids).logits[:, -1, :]
 
