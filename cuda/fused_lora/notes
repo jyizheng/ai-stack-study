@@ -1,0 +1,13 @@
+Warp-shuffle cross-thread reduction: distribute the RANK loop across threads in a warp and then invoke __shfl_down_sync to finalize the sum for each output, trading off fewer registers for reduced per-thread work.
+
+Tensor-core kernels: fuse the X·W GEMM and the small RANK update into a single WMMA call for half-precision on Ampere+/Hopper GPUs.
+
+Asynchronous copy (cp.async) and software pipelines: use CUDA 11’s memcpy_async to overlap loads of sX/sW with compute even more efficiently.
+
+
+在真正的高性能 GEMM 中，往往还会加上 Shared‐Memory 预取，register‐tiling，以及 warp‐level 或 block‐level Tensor Core 调用。
+
+如果每个 warp 要处理多个输出元素，可以把 lane 维度映射到 
+(𝑚,𝑛)的小 tile，再对每个 tile 内的 RANK 做 shuffle‐reduce。
+
+本例是概念演示，实际部署时建议结合 double‐buffering、register‐tiling 等技术进一步提速。
