@@ -1,0 +1,87 @@
+# Gated MLP 计算流程
+
+Gated MLP（gMLP）是一种在序列建模中仅依赖全连接层的架构，通过“门控”单元在 token 维度引入信息交互，从而增强模型对序列内部结构的捕捉能力。
+
+---
+
+## 1. 输入与预处理
+
+输入张量 X 的形状为 (B, N, C)，其中  
+- B：批量大小  
+- N：序列长度（tokens 数）  
+- C：特征维度  
+
+在进入 MLP 计算前，通常先做层归一化：  
+```text
+X_norm = LayerNorm(X)
+```
+
+---
+
+## 2. 通道扩展（Channel Projection）
+
+对 X_norm 做一次线性投影，将通道数从 C 扩展到 2C：  
+```text
+Z = X_norm · W1 + b1
+```  
+然后在最后一维切分为两部分：  
+- U ∈ ℝ^(B, N, C)  
+- V ∈ ℝ^(B, N, C)
+
+---
+
+## 3. 非线性激活与门控分支
+
+1. 对 U 应用非线性激活（如 GELU 或 SiLU）：  
+   U' = Activation(U)  
+2. 在 token 维度对 V 做门控投影：  
+   - 先转置 V 为 (B, C, N)  
+   - 用小型 MLP 或深度可分卷积沿 N 维变换：  
+     V_gate = Wg · Vᵀ + bg  
+   - 再转置回 (B, N, C)  
+3. 按元素相乘生成门控输出：  
+   G = U' ⊙ V_gate
+
+---
+
+## 4. 通道压缩与残差连接
+
+将 G 再次投影回原始维度 C：  
+```text
+Y_proj = G · W2 + b2
+```  
+最后与输入 X 做残差相加：  
+```text
+Y = X + Y_proj
+```
+
+---
+
+## 5. 完整伪代码
+
+```text
+function gMLP_Block(X):
+    X_norm = LayerNorm(X)
+
+    Z      = X_norm @ W1 + b1        # (B, N, 2C)
+    U, V   = split(Z, dim=-1)         # U,V each (B, N, C)
+
+    U_act  = GELU(U)                  # (B, N, C)
+    V_t    = transpose(V, (0,2,1))    # (B, C, N)
+    V_gate = V_t @ Wg + bg            # (B, C, N)
+    V_gate = transpose(V_gate, (0,2,1)) # (B, N, C)
+
+    G      = U_act * V_gate           # (B, N, C)
+    Y_proj = G @ W2 + b2              # (B, N, C)
+
+    return X + Y_proj
+```
+
+---
+
+### 扩展与优化思路
+
+- 门控投影可用轻量卷积或稀疏方法加速长序列处理。  
+- 在多层堆叠中，可在残差前后添加 Dropout 或第二次 LayerNorm。  
+- 性能优化可结合共享内存预取、寄存器瓦片化、warp‐shuffle 归约以及 Tensor Core 加速。
+
